@@ -1,3 +1,7 @@
+#
+*.pck
+*/
+
 # Prerequisites
 *.d
 
