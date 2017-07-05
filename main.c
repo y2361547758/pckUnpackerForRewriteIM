@@ -72,7 +72,7 @@ int iWrite(FILE* fIn, const char* fName, unsigned long iOffset, unsigned long iF
 //#define debug
 #ifdef debug
 const int argc = 2;
-const char *argv[] = {"mail.c.exe","__bgm.pck"};
+const char *argv[] = {"mail.c.exe","__g00_patch_000.pck"};
 int main() {
 #else
 int main(int argc, const char* argv[]) {
@@ -135,6 +135,7 @@ int main(int argc, const char* argv[]) {
 	for(i=iSubLen=0;i<iCount;++i)iSubLen += iReadLEInt(fPck,4);
 	//lCurSN = ftell(fPck);
 	lCurSO = lCurSN + iSubLen;
+	while(lCurSO % 4)++lCurSO;
 	for(i=0;i<iCount;++i){
 		fseek(fPck,lCurSL,SEEK_SET);
 		iSubLen = iReadLEInt(fPck,4);
