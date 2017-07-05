@@ -86,11 +86,13 @@ int main(int argc, const char* argv[]) {
 	
 	//Open and check the pck file
 	if(argc<2){
-		printf("No Input File");
-		return 1;
+		printf("Usage:\n");
+		printf("\t%s [pck File]\n",argv[0]);
+		printf("\tNote: please use full path\n");
+		return 0;
 	}
 	if(access(argv[1], F_OK)){
-		printf("No Input File");
+		printf("Cannot Open this File");
 		return 1;
 	}
 	iLen = strlen(argv[1]) - 4;//(strlen(".pck") - 1);
@@ -105,7 +107,6 @@ int main(int argc, const char* argv[]) {
 
 	//Make the output dir
 	strncpy(sOutDir,argv[1],iLen);
-	//sOutDir[iLen] = '\0';
 	sOutDir[iLen] = '\\';
 	sOutDir[++iLen] = '\0';
 	if(!access(sOutDir, F_OK)){
@@ -141,7 +142,7 @@ int main(int argc, const char* argv[]) {
 		//lCurSL = ftell(fPck);
 		fseek(fPck,lCurSN,SEEK_SET);
 		sSubFN = sReadName(fPck,iSubLen);
-			printf("NO.%03d:%s\t",i,sSubFN);
+			printf("NO.%03d:%s\t.",i,sSubFN);
 		strcpy(sOutDir + iLen,sSubFN);
 			printf(".");
 		free(sSubFN);
