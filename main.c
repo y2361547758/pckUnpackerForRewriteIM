@@ -5,12 +5,13 @@
 	#include<io.h>
 	#include<direct.h>
 	#define md _mkdir
-	#define getcwd _getcwd
 #else
 	#include<unistd.h>
 	#include<sys/stat.h>
 	#define md(fName) mkdir(fName,0777)
 #endif
+typedef unsigned short UCS2;
+typedef unsigned char UINT8;
 size_t iGetFileSize(FILE *fn){
 	size_t ret=-1;
 	if(fn!=NULL){
@@ -21,12 +22,13 @@ size_t iGetFileSize(FILE *fn){
 }
 int iFileErr(FILE* fN){
 	extern int errno;
-	if(!fN && ferror(fN)){
+	if(!fN || ferror(fN)){
 		switch(errno){
 			case 13: printf("Permission Deny!");break;
 			case 2: printf("File Not Found!");break;
 			default: printf("Unknow error code %d",errno);
 		}
+		clearerr(fN);
 		return errno;
 	}
 	return 0;
@@ -41,46 +43,76 @@ unsigned long long iReadLEInt(FILE* fN, int iCount){
 	}
 	return iInt;
 }
+UINT8 UCS2toUTF8Code(UCS2 ucs2_code, UINT8* utf8_code){
+	 int length = 0;
+	 if(!utf8_code)return 0;
+	 if(0x0080 > ucs2_code){
+		/* 1 byte UTF-8 Character.*/
+		*utf8_code = (UINT8)ucs2_code;
+		length = 1;
+	 }else if(0x0800 > ucs2_code){
+		/*2 bytes UTF-8 Character.*/
+		*utf8_code = ((UINT8)(ucs2_code >> 6)) | 0xc0;
+		*(utf8_code + 1) = ((UINT8)(ucs2_code & 0x003F)) | 0x80;
+		length = 2;
+	 }else{
+		/* 3 bytes UTF-8 Character .*/
+		*utf8_code = ((UINT8)(ucs2_code >> 12)) | 0xE0;
+		*(utf8_code + 1) = ((UINT8)((ucs2_code & 0x0FC0)>> 6)) | 0x80;
+		*(utf8_code + 2) = ((UINT8)(ucs2_code & 0x003F)) | 0x80;
+		length = 3;
+	 }
+	 return length;
+}
 char* sReadName(FILE* fN, int iCount){
-	int i = 0;
-	char* sName = (char*)malloc(iCount/2+1);
-	//memset(sName,iCount*2+1,0);
+	int i = 0,iLen = 0;
+	unsigned char ucBitL,ucBitH;
+	UCS2 ucChar;
+	//char* sName = (char*)malloc((iCount/2*3+1)*sizeof(char));
+	char* sName = (char*)malloc(MAX_PATH);
 	for(;i<iCount;i+=2){
-		sName[i/2] = fgetc(fN);
-		fgetc(fN);
+		ucBitL = fgetc(fN);
+		ucBitH = fgetc(fN);
+		ucChar = ucBitL | ucBitH << 8;
+		iLen += UCS2toUTF8Code(ucChar, sName + iLen);
 	}
-	sName[iCount/2] = '\0';
+	sName[iLen] = '\0';
 	return sName;
 }
 int iWrite(FILE* fIn, const char* fName, unsigned long iOffset, unsigned long iFSize){
 	extern int errno;
 	FILE* fOut;
+	#ifdef debug
+		char* buffer = (char*)malloc(iFSize*sizeof(char));
+	#endif
+	errno = 0;
 	fOut = fopen(fName,"wb");
 	if(iFileErr(fOut))return errno;
 	fseek(fIn,iOffset,SEEK_SET);
-	//violence
-	while(iFSize--/* && !ferror(fIn) && !ferror(fOut)*/)fputc(fgetc(fIn),fOut);
-	/*//Load sub-file to memory
-	char* buffer = (char*)malloc(iFSize*sizeof(char));
-	fread(buffer,sizeof(char),iFSize,fIn);
-	fwrite(buffer,sizeof(char),iFSize,fOut);
-	free(buffer);
-	*/
+	#ifdef debug
+		//Load sub-file to memory
+		fread(buffer,sizeof(char),iFSize,fIn);
+		fwrite(buffer,sizeof(char),iFSize,fOut);
+		free(buffer);
+	#else
+		//violence
+		while(iFSize--/* && !ferror(fIn) && !ferror(fOut)*/)fputc(fgetc(fIn),fOut);
+	#endif
 	fclose(fOut);
 	return errno;
 }
 //#define debug
 #ifdef debug
 const int argc = 2;
-const char *argv[] = {"mail.c.exe","__g00_patch_000.pck"};
+const char *argv[] = {"mail.c.exe","D:\\Programing\\Git\\pckUnpackerForRewriteIM\\__mov.pck"};
 int main() {
 #else
-int main(int argc, const char* argv[]) {
+int main(int argc, const char *argv[]) {
 #endif
 	extern int errno;
 	FILE *fPck,*fOut;
 	size_t iLen,iFSize;
-	char sOutDir[1024],*sSubFN,*buf;
+	unsigned char sOutDir[MAX_PATH],*sSubFN;
 	unsigned int iL1,iCount,iW,iH,iSubLen,i;
 	unsigned long lSubSize,lOffset,lCurSL,lCurSN,lCurSO;
 	
@@ -129,7 +161,7 @@ int main(int argc, const char* argv[]) {
 	iW = iReadLEInt(fPck,4);
 	iH = iReadLEInt(fPck,4);
 	printf("width:%d heigh:%d (unknow data)\n",iW,iH);
-	iReadLEInt(fPck,4*4);
+	iReadLEInt(fPck,4*4);	//16bytes pad
 	lCurSL = ftell(fPck);
 	lCurSN = lCurSL + iCount*4;
 	for(i=iSubLen=0;i<iCount;++i)iSubLen += iReadLEInt(fPck,4);
@@ -143,25 +175,18 @@ int main(int argc, const char* argv[]) {
 		//lCurSL = ftell(fPck);
 		fseek(fPck,lCurSN,SEEK_SET);
 		sSubFN = sReadName(fPck,iSubLen);
-			printf("NO.%03d:%s\t.",i,sSubFN);
+			printf("*%03d:    %-48s  ...",i+1,sSubFN);
 		strcpy(sOutDir + iLen,sSubFN);
-			printf(".");
 		free(sSubFN);
-			printf(".");
 		lCurSN += iSubLen;
-			printf(".");
 		//lCurSN = ftell(fPck);
 		fseek(fPck,lCurSO,SEEK_SET);
-			printf(".");
 		lOffset = iReadLEInt(fPck,8);
-			printf(".");
 		lSubSize = iReadLEInt(fPck,8);
-			printf(".");
 		lCurSO += 16;
-			printf(".");
 		//lCurSO = ftell(fPck);
-		iWrite(fPck,sOutDir,lOffset,lSubSize);
-			printf("done\n");
+		if(!iWrite(fPck,sOutDir,lOffset,lSubSize))printf("done");
+		printf(".\n");
 	}
 	fclose(fPck);
 	printf("Finished\n");
