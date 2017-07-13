@@ -4,7 +4,7 @@
 #ifdef WIN32
 	#include<io.h>
 	#include<direct.h>
-	#define md _mkdir
+	#define md _wmkdir
 #else
 	#include<unistd.h>
 	#include<sys/stat.h>
@@ -54,21 +54,24 @@ UINT8 UCS2toUTF8Code(UCS2 ucs2_code, UINT8* utf8_code){
 		/*2 bytes UTF-8 Character.*/
 		*utf8_code = ((UINT8)(ucs2_code >> 6)) | 0xc0;
 		*(utf8_code + 1) = ((UINT8)(ucs2_code & 0x003F)) | 0x80;
+		//*(utf8_code + 1) = ((UINT8)(ucs2_code >> 6)) | 0xc0;
+		//*(utf8_code + 0) = ((UINT8)(ucs2_code & 0x003F)) | 0x80;
 		length = 2;
 	 }else{
 		/* 3 bytes UTF-8 Character .*/
 		*utf8_code = ((UINT8)(ucs2_code >> 12)) | 0xE0;
+		//*(utf8_code + 2) = ((UINT8)(ucs2_code >> 12)) | 0xE0;
 		*(utf8_code + 1) = ((UINT8)((ucs2_code & 0x0FC0)>> 6)) | 0x80;
 		*(utf8_code + 2) = ((UINT8)(ucs2_code & 0x003F)) | 0x80;
+		//*(utf8_code + 0) = ((UINT8)(ucs2_code & 0x003F)) | 0x80;
 		length = 3;
 	 }
 	 return length;
-}
+}/*
 char* sReadName(FILE* fN, int iCount){
 	int i = 0,iLen = 0;
 	unsigned char ucBitL,ucBitH;
 	UCS2 ucChar;
-	//char* sName = (char*)malloc((iCount/2*3+1)*sizeof(char));
 	char* sName = (char*)malloc(MAX_PATH);
 	for(;i<iCount;i+=2){
 		ucBitL = fgetc(fN);
@@ -78,15 +81,37 @@ char* sReadName(FILE* fN, int iCount){
 	}
 	sName[iLen] = '\0';
 	return sName;
+}*/
+wchar_t* wsReadName(FILE* fN, int iCount){
+	int i = 0;
+	unsigned char ucBitL,ucBitH;
+	wchar_t* sName = (wchar_t*)malloc((iCount/2+1)*sizeof(wchar_t));
+	for(;i<iCount;i+=2){
+		ucBitL = fgetc(fN);
+		ucBitH = fgetc(fN);
+		sName[i/2] = ucBitL | ucBitH << 8;
+	}
+	sName[iCount/2] = L'\0';
+	return sName;
 }
-int iWrite(FILE* fIn, const char* fName, unsigned long iOffset, unsigned long iFSize){
+void vShowLog(wchar_t* wsFN, int iCount){
+	int i=0,iLenFN = wcslen(wsFN),iLenT = 0;
+	char sTmpFN[MAX_PATH];
+	for(;i<iLenFN;++i){
+		iLenT += UCS2toUTF8Code(wsFN[i], sTmpFN + iLenT);
+	}
+	sTmpFN[iLenT] = '\0';
+	printf("*%03d:    %-48s  ...",iCount,sTmpFN);
+	return;
+}
+int iWrite(FILE* fIn, const wchar_t* fName, unsigned long iOffset, unsigned long iFSize){
 	extern int errno;
 	FILE* fOut;
 	#ifdef debug
-		char* buffer = (char*)malloc(iFSize*sizeof(char));
+		wchar_t* buffer = (wchar_t*)malloc(iFSize*sizeof(wchar_t));
 	#endif
 	errno = 0;
-	fOut = fopen(fName,"wb");
+	fOut = _wfopen(fName,L"wb");
 	if(iFileErr(fOut))return errno;
 	fseek(fIn,iOffset,SEEK_SET);
 	#ifdef debug
@@ -104,50 +129,49 @@ int iWrite(FILE* fIn, const char* fName, unsigned long iOffset, unsigned long iF
 //#define debug
 #ifdef debug
 const int argc = 2;
-const char *argv[] = {"mail.c.exe","D:\\Programing\\Git\\pckUnpackerForRewriteIM\\__mov.pck"};
+const wchar_t *argv[] = {L"mail.c.exe",L"D:\\Programing\\Git\\pckUnpackerForRewriteIM\\__mov.pck"};
 int main() {
 #else
-int main(int argc, const char *argv[]) {
+int main(int argc, const wchar_t *argv[]) {
 #endif
 	extern int errno;
 	FILE *fPck,*fOut;
 	size_t iLen,iFSize;
-	unsigned char sOutDir[MAX_PATH],*sSubFN;
+	wchar_t wsOutDir[MAX_PATH],*wsSubFN;
 	unsigned int iL1,iCount,iW,iH,iSubLen,i;
 	unsigned long lSubSize,lOffset,lCurSL,lCurSN,lCurSO;
 	
 	//Open and check the pck file
 	if(argc<2){
 		printf("Usage:\n");
-		printf("\t%s [pck File]\n",argv[0]);
+		wprintf(L"\t%s [pck File]\n",argv[0]);
 		printf("\tNote: please use full path\n");
 		return 0;
 	}
-	if(access(argv[1], F_OK)){
+	if(_waccess(argv[1], F_OK)){
 		printf("Cannot Open this File");
 		return 1;
 	}
-	iLen = strlen(argv[1]) - 4;//(strlen(".pck") - 1);
-	if(strcmp(argv[1] + iLen,".pck")){
+	iLen = wcslen(argv[1]) - 4;//(wcslen(".pck") - 1);
+	if(wcscmp(argv[1] + iLen,L".pck")){
 		printf("NOT Require File!");
 		return 2;
 	}
-	fPck = fopen(argv[1],"rb");
+	fPck = _wfopen(argv[1],L"rb");
 	if(iFileErr(fPck))return errno;
 	iFSize = iGetFileSize(fPck);
 	rewind(fPck);
 
-	//Make the output dir
-	strncpy(sOutDir,argv[1],iLen);
-	sOutDir[iLen] = '\\';
-	sOutDir[++iLen] = '\0';
-	if(!access(sOutDir, F_OK)){
-		if(access(sOutDir, W_OK)){
-			printf("Dir %s cannot be read",sOutDir);
+	wcsncpy(wsOutDir,argv[1],iLen);
+	wsOutDir[iLen] = '\\';
+	wsOutDir[++iLen] = '\0';
+	if(!_waccess(wsOutDir, F_OK)){
+		if(_waccess(wsOutDir, W_OK)){
+			printf("Dir %s cannot be read",wsOutDir);
 			return 3;
 		}
 	}else{
-		md(sOutDir);
+		md(wsOutDir);
 	}
 
 	//Read and divide the pck
@@ -174,10 +198,10 @@ int main(int argc, const char *argv[]) {
 		lCurSL += 4;
 		//lCurSL = ftell(fPck);
 		fseek(fPck,lCurSN,SEEK_SET);
-		sSubFN = sReadName(fPck,iSubLen);
-			printf("*%03d:    %-48s  ...",i+1,sSubFN);
-		strcpy(sOutDir + iLen,sSubFN);
-		free(sSubFN);
+		wsSubFN = wsReadName(fPck,iSubLen);
+			vShowLog(wsSubFN,i+1);
+		wcscpy(wsOutDir + iLen,wsSubFN);
+		free(wsSubFN);
 		lCurSN += iSubLen;
 		//lCurSN = ftell(fPck);
 		fseek(fPck,lCurSO,SEEK_SET);
@@ -185,12 +209,12 @@ int main(int argc, const char *argv[]) {
 		lSubSize = iReadLEInt(fPck,8);
 		lCurSO += 16;
 		//lCurSO = ftell(fPck);
-		if(!iWrite(fPck,sOutDir,lOffset,lSubSize))printf("done");
+		if(!iWrite(fPck,wsOutDir,lOffset,lSubSize))printf("done");
 		printf(".\n");
 	}
 	fclose(fPck);
 	printf("Finished\n");
-	sOutDir[iLen] = '\0';
-	printf("Pck was been unpacked in %s\n",sOutDir);
+	wsOutDir[iLen] = '\0';
+	wprintf(L"Pck has been unpacked in %s\n",wsOutDir);
 	return 0;
 }
