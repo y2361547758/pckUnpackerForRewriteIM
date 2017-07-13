@@ -10,8 +10,6 @@
 	#include<sys/stat.h>
 	#define md(fName) mkdir(fName,0777)
 #endif
-typedef unsigned short UCS2;
-typedef unsigned char UINT8;
 size_t iGetFileSize(FILE *fn){
 	size_t ret=-1;
 	if(fn!=NULL){
@@ -43,45 +41,27 @@ unsigned long long iReadLEInt(FILE* fN, int iCount){
 	}
 	return iInt;
 }
-UINT8 UCS2toUTF8Code(UCS2 ucs2_code, UINT8* utf8_code){
+int UCS2toUTF8Code(wchar_t ucs2_code, char* utf8_code){
 	 int length = 0;
 	 if(!utf8_code)return 0;
 	 if(0x0080 > ucs2_code){
 		/* 1 byte UTF-8 Character.*/
-		*utf8_code = (UINT8)ucs2_code;
+		*utf8_code = (char)ucs2_code;
 		length = 1;
 	 }else if(0x0800 > ucs2_code){
 		/*2 bytes UTF-8 Character.*/
-		*utf8_code = ((UINT8)(ucs2_code >> 6)) | 0xc0;
-		*(utf8_code + 1) = ((UINT8)(ucs2_code & 0x003F)) | 0x80;
-		//*(utf8_code + 1) = ((UINT8)(ucs2_code >> 6)) | 0xc0;
-		//*(utf8_code + 0) = ((UINT8)(ucs2_code & 0x003F)) | 0x80;
+		*utf8_code = ((char)(ucs2_code >> 6)) | 0xc0;
+		*(utf8_code + 1) = ((char)(ucs2_code & 0x003F)) | 0x80;
 		length = 2;
 	 }else{
 		/* 3 bytes UTF-8 Character .*/
-		*utf8_code = ((UINT8)(ucs2_code >> 12)) | 0xE0;
-		//*(utf8_code + 2) = ((UINT8)(ucs2_code >> 12)) | 0xE0;
-		*(utf8_code + 1) = ((UINT8)((ucs2_code & 0x0FC0)>> 6)) | 0x80;
-		*(utf8_code + 2) = ((UINT8)(ucs2_code & 0x003F)) | 0x80;
-		//*(utf8_code + 0) = ((UINT8)(ucs2_code & 0x003F)) | 0x80;
+		*utf8_code = ((char)(ucs2_code >> 12)) | 0xE0;
+		*(utf8_code + 1) = ((char)((ucs2_code & 0x0FC0)>> 6)) | 0x80;
+		*(utf8_code + 2) = ((char)(ucs2_code & 0x003F)) | 0x80;
 		length = 3;
 	 }
 	 return length;
-}/*
-char* sReadName(FILE* fN, int iCount){
-	int i = 0,iLen = 0;
-	unsigned char ucBitL,ucBitH;
-	UCS2 ucChar;
-	char* sName = (char*)malloc(MAX_PATH);
-	for(;i<iCount;i+=2){
-		ucBitL = fgetc(fN);
-		ucBitH = fgetc(fN);
-		ucChar = ucBitL | ucBitH << 8;
-		iLen += UCS2toUTF8Code(ucChar, sName + iLen);
-	}
-	sName[iLen] = '\0';
-	return sName;
-}*/
+}
 wchar_t* wsReadName(FILE* fN, int iCount){
 	int i = 0;
 	unsigned char ucBitL,ucBitH;
@@ -129,10 +109,10 @@ int iWrite(FILE* fIn, const wchar_t* fName, unsigned long iOffset, unsigned long
 //#define debug
 #ifdef debug
 const int argc = 2;
-const wchar_t *argv[] = {L"mail.c.exe",L"D:\\Programing\\Git\\pckUnpackerForRewriteIM\\__mov.pck"};
+const char *argv[] = {"mail.c.exe","D:\\Programing\\Git\\pckUnpackerForRewriteIM\\__mov.pck"};
 int main() {
 #else
-int main(int argc, const wchar_t *argv[]) {
+int main(int argc, const char *argv[]) {
 #endif
 	extern int errno;
 	FILE *fPck,*fOut;
@@ -144,25 +124,24 @@ int main(int argc, const wchar_t *argv[]) {
 	//Open and check the pck file
 	if(argc<2){
 		printf("Usage:\n");
-		wprintf(L"\t%s [pck File]\n",argv[0]);
+		printf("\t%s [pck File]\n",argv[0]);
 		printf("\tNote: please use full path\n");
 		return 0;
 	}
-	if(_waccess(argv[1], F_OK)){
+	if(access(argv[1], F_OK)){
 		printf("Cannot Open this File");
 		return 1;
 	}
-	iLen = wcslen(argv[1]) - 4;//(wcslen(".pck") - 1);
-	if(wcscmp(argv[1] + iLen,L".pck")){
+	iLen = strlen(argv[1]) - 4;//(wcslen(".pck") - 1);
+	if(strcmp(argv[1] + iLen,".pck")){
 		printf("NOT Require File!");
 		return 2;
 	}
-	fPck = _wfopen(argv[1],L"rb");
+	fPck = fopen(argv[1],"rb");
 	if(iFileErr(fPck))return errno;
 	iFSize = iGetFileSize(fPck);
 	rewind(fPck);
-
-	wcsncpy(wsOutDir,argv[1],iLen);
+	for(i=0;i<iLen;++i)wsOutDir[i] = argv[1][i];
 	wsOutDir[iLen] = '\\';
 	wsOutDir[++iLen] = '\0';
 	if(!_waccess(wsOutDir, F_OK)){
